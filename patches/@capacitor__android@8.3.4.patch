@@ -1,0 +1,48 @@
+diff --git a/capacitor/src/main/java/com/getcapacitor/Bridge.java b/capacitor/src/main/java/com/getcapacitor/Bridge.java
+index d4995fbbc9e4d3f0db7ac0330ef78e2f3547b055..3e255e124835d027dfa3dc94bcbedc879aef8332 100644
+--- a/capacitor/src/main/java/com/getcapacitor/Bridge.java
++++ b/capacitor/src/main/java/com/getcapacitor/Bridge.java
+@@ -332,12 +332,18 @@ public class Bridge {
+         // Check getCurrentWebViewPackage() directly if above Android 8
+         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+             PackageInfo info = WebView.getCurrentWebViewPackage();
++            // Guard: on some devices (e.g. Huawei without GMS, customized ROMs,
++            // or while the System WebView is being updated/disabled) this can be null.
++            if (info == null || info.versionName == null) {
++                Logger.warn("WebView packageInfo is null, skipping minimum WebView check");
++                return true;
++            }
+             Pattern pattern = Pattern.compile("(\\d+)");
+             Matcher matcher = pattern.matcher(info.versionName);
+             if (matcher.find()) {
+                 String majorVersionStr = matcher.group(0);
+                 int majorVersion = Integer.parseInt(majorVersionStr);
+-                if (info.packageName.equals("com.huawei.webview")) {
++                if (info.packageName != null && info.packageName.equals("com.huawei.webview")) {
+                     return majorVersion >= config.getMinHuaweiWebViewVersion();
+                 }
+                 return majorVersion >= config.getMinWebViewVersion();
+@@ -349,6 +355,7 @@ public class Bridge {
+         // Otherwise manually check WebView versions
+         try {
+             PackageInfo info = InternalUtils.getPackageInfo(pm, "com.android.chrome");
++            if (info == null || info.versionName == null) throw new Exception("packageInfo is null");
+             String majorVersionStr = info.versionName.split("\\.")[0];
+             int majorVersion = Integer.parseInt(majorVersionStr);
+             return majorVersion >= config.getMinWebViewVersion();
+@@ -358,6 +365,7 @@ public class Bridge {
+ 
+         try {
+             PackageInfo info = InternalUtils.getPackageInfo(pm, "com.android.webview");
++            if (info == null || info.versionName == null) throw new Exception("packageInfo is null");
+             String majorVersionStr = info.versionName.split("\\.")[0];
+             int majorVersion = Integer.parseInt(majorVersionStr);
+             return majorVersion >= config.getMinWebViewVersion();
+@@ -377,6 +385,7 @@ public class Bridge {
+     private int extractWebViewMajorVersion(final PackageManager pm, final String webViewPackageName) {
+         try {
+             final PackageInfo info = InternalUtils.getPackageInfo(pm, webViewPackageName);
++            if (info == null || info.versionName == null) throw new Exception("packageInfo is null");
+             final String majorVersionStr = info.versionName.split("\\.")[0];
+             final int majorVersion = Integer.parseInt(majorVersionStr);
+             return majorVersion;

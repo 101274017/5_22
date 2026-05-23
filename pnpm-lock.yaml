@@ -4,6 +4,11 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  '@capacitor/android@8.3.4':
+    hash: dd1dd1ec04ff7cc0a3fc8adcd94597e7621e3056dafc4b6d0e403adcdb98d798
+    path: patches/@capacitor__android@8.3.4.patch
+
 importers:
 
   .: {}
@@ -12,16 +17,16 @@ importers:
     dependencies:
       '@capacitor/android':
         specifier: ^8.3.4
-        version: 8.3.4(@capacitor/core@8.3.4)
+        version: 8.3.4(patch_hash=dd1dd1ec04ff7cc0a3fc8adcd94597e7621e3056dafc4b6d0e403adcdb98d798)(@capacitor/core@8.3.4)
+      '@capacitor/app':
+        specifier: ^8.1.0
+        version: 8.1.0(@capacitor/core@8.3.4)
       '@capacitor/cli':
         specifier: ^8.3.4
         version: 8.3.4
       '@capacitor/core':
         specifier: ^8.3.4
         version: 8.3.4
-      '@capacitor/geolocation':
-        specifier: ^8.2.0
-        version: 8.2.0(@capacitor/core@8.3.4)
       react:
         specifier: ^18.3.1
         version: 18.3.1
@@ -148,6 +153,11 @@ packages:
     peerDependencies:
       '@capacitor/core': ^8.3.0
 
+  '@capacitor/app@8.1.0':
+    resolution: {integrity: sha512-MlmttTOWHDedr/G4SrhNRxsXMqY+R75S4MM4eIgzsgCzOYhb/MpCkA5Q3nuOCfL1oHm26xjUzqZ5aupbOwdfYg==}
+    peerDependencies:
+      '@capacitor/core': '>=8.0.0'
+
   '@capacitor/cli@8.3.4':
     resolution: {integrity: sha512-QEmyNdiDDVNYl0Mahm7YTVA/3t2tKcy7FWYDapeKGavS6HDNHZSjyTVwQpUXQbDZrrs/PS2Wau3Aii+LIFwm/A==}
     engines: {node: '>=22.0.0'}
@@ -155,14 +165,6 @@ packages:
 
   '@capacitor/core@8.3.4':
     resolution: {integrity: sha512-CqRQCkb6HXxcx/N7s+hHTN6ef2CmamFiRMITwm4qB840ph56mS42bzUgn6tKCP+RZjdDweiRHj9ytDDeN6jFag==}
-
-  '@capacitor/geolocation@8.2.0':
-    resolution: {integrity: sha512-N29QcoIPmme0xSxRkm7+3hjoHp6mBAOarxecvtCCZKyOBeKiJsFUq981cezg2XWBa6fhCXJMCCjQPngKK/dIag==}
-    peerDependencies:
-      '@capacitor/core': '>=8.0.0'
-
-  '@capacitor/synapse@1.0.4':
-    resolution: {integrity: sha512-/C1FUo8/OkKuAT4nCIu/34ny9siNHr9qtFezu4kxm6GY1wNFxrCFWjfYx5C1tUhVGz3fxBABegupkpjXvjCHrw==}
 
   '@esbuild/aix-ppc64@0.25.12':
     resolution: {integrity: sha512-Hhmwd6CInZ3dwpuGTF8fJG6yoWmsToE+vYgD4nytZVxcu1ulHpUQRAB1UJ8+N1Am3Mz4+xOByoQoSZf4D+CpkA==}
@@ -1401,7 +1403,11 @@ snapshots:
       '@babel/helper-string-parser': 7.27.1
       '@babel/helper-validator-identifier': 7.28.5
 
-  '@capacitor/android@8.3.4(@capacitor/core@8.3.4)':
+  '@capacitor/android@8.3.4(patch_hash=dd1dd1ec04ff7cc0a3fc8adcd94597e7621e3056dafc4b6d0e403adcdb98d798)(@capacitor/core@8.3.4)':
+    dependencies:
+      '@capacitor/core': 8.3.4
+
+  '@capacitor/app@8.1.0(@capacitor/core@8.3.4)':
     dependencies:
       '@capacitor/core': 8.3.4
 
@@ -1430,13 +1436,6 @@ snapshots:
   '@capacitor/core@8.3.4':
     dependencies:
       tslib: 2.8.1
-
-  '@capacitor/geolocation@8.2.0(@capacitor/core@8.3.4)':
-    dependencies:
-      '@capacitor/core': 8.3.4
-      '@capacitor/synapse': 1.0.4
-
-  '@capacitor/synapse@1.0.4': {}
 
   '@esbuild/aix-ppc64@0.25.12':
     optional: true

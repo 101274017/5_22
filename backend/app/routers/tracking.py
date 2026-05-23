@@ -1,10 +1,10 @@
 """技术埋点路由"""
 import logging
-from fastapi import APIRouter, Depends, Header
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from typing import Optional
 
 from app.database import get_db
+from app.middleware.tenant import get_tenant_id
 from app.models import TrackingLog
 from app.schemas import TrackRequest, TrackResponse
 
@@ -15,11 +15,10 @@ router = APIRouter(prefix="/api/v1", tags=["tracking"])
 @router.post("/track", response_model=TrackResponse)
 def save_tracking(
     req: TrackRequest,
-    x_tenant_id: Optional[str] = Header(default="default"),
+    tenant_id: str = Depends(get_tenant_id),
     db: Session = Depends(get_db),
 ):
     """接收前端技术埋点事件并持久化"""
-    tenant_id = x_tenant_id or "default"
     log = TrackingLog(
         tenant_id=tenant_id,
         event_type=req.event_type,

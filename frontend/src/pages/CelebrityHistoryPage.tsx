@@ -2,8 +2,8 @@
  * 名人对话记录页
  */
 import { useState, useEffect } from 'react'
-import { PageRoute } from '@/App'
-import { celebrityApi } from '@/api/client'
+import { PageRoute } from '@/types/routes'
+import { listCelebrityEncounters } from '@/services/localStore'
 
 interface Record {
   id: number
@@ -15,24 +15,38 @@ interface Record {
 }
 
 interface Props {
+  tenantId: string
   userId: string
   onNavigate: (route: PageRoute) => void
 }
 
-export default function CelebrityHistoryPage({ userId, onNavigate }: Props) {
+export default function CelebrityHistoryPage({ tenantId: _tenantId, userId, onNavigate }: Props) {
   const [records, setRecords] = useState<Record[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     loadRecords()
   }, [])
 
-  const loadRecords = async () => {
+  const loadRecords = () => {
+    setError(null)
     try {
-      const data = await celebrityApi.getList(userId)
-      setRecords(data)
-    } catch {
-      // 静默处理
+      const data = listCelebrityEncounters(userId)
+      setRecords(
+        data.map((e) => ({
+          id: e.id,
+          character_name: e.characterName,
+          identity: e.identity,
+          gift_words: e.giftWords,
+          badge_name: e.badgeName,
+          status: e.status,
+        }))
+      )
+    } catch (err: unknown) {
+      console.error('加载名人对话记录失败:', err)
+      const msg = err instanceof Error ? err.message : String(err)
+      setError(`加载失败：${msg}`)
     } finally {
       setLoading(false)
     }
@@ -67,6 +81,15 @@ export default function CelebrityHistoryPage({ userId, onNavigate }: Props) {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {error && (
+          <div className="bg-red-950/30 border border-red-800/40 rounded-xl p-4 text-center space-y-2">
+            <p className="text-xs text-red-300">{error}</p>
+            <button onClick={loadRecords} className="text-xs text-amber-400 border border-amber-700/50 px-3 py-1.5 rounded-lg">
+              重试
+            </button>
           </div>
         )}
 

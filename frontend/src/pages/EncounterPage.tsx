@@ -4,7 +4,7 @@
  */
 import { useState, useEffect, useRef } from 'react'
 import { PageRoute } from '@/App'
-import { encounterApi } from '@/api/client'
+import { summonPoi, answerPoi, chatPoi } from '@/services/encounterEngine'
 import { emitTrackingEvent } from '@/utils/tracker'
 
 type Step = 'arriving' | 'summoned' | 'answering' | 'rewarded'
@@ -58,8 +58,13 @@ export default function EncounterPage({ tenantId, userId, poiName, onNavigate }:
 
   const doSummon = async () => {
     try {
-      const data = await encounterApi.summon(tenantId, { user_id: userId, poi_name: poiName })
-      setAncientData(data)
+      const enc = await summonPoi(userId, poiName)
+      setAncientData({
+        encounter_id: enc.id,
+        character_name: enc.characterName,
+        opening_speech: enc.openingSpeech,
+        question: enc.question,
+      })
       setStep('summoned')
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
@@ -73,11 +78,12 @@ export default function EncounterPage({ tenantId, userId, poiName, onNavigate }:
     if (!ancientData || !userAnswer.trim() || submitting) return
     setSubmitting(true)
     try {
-      const data = await encounterApi.answer(tenantId, {
-        encounter_id: ancientData.encounter_id,
-        user_answer: userAnswer.trim(),
+      const data = await answerPoi(ancientData.encounter_id, userAnswer.trim())
+      setRewardData({
+        gift_words: data.gift_words,
+        badge_name: data.badge_name,
+        badge_icon: data.badge_icon,
       })
-      setRewardData(data)
       setStep('rewarded')
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
@@ -93,10 +99,7 @@ export default function EncounterPage({ tenantId, userId, poiName, onNavigate }:
     setChatInput('')
     setChatSending(true)
     try {
-      const data = await encounterApi.chat(tenantId, {
-        encounter_id: ancientData.encounter_id,
-        message: question,
-      })
+      const data = await chatPoi(ancientData.encounter_id, question)
       setChatList((prev) => [...prev, { q: question, a: data.reply, ref: data.reference }])
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)

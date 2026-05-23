@@ -12,6 +12,32 @@ body {
   overscroll-behavior: none;
 }
 
+/* 安卓状态栏 / 异形屏安全区适配：
+   所有 sticky 顶部栏自动留出状态栏高度，
+   未使用 PageHeader 的页面也能避免被刘海/挖孔遮挡 */
+.sticky.top-0 {
+  padding-top: calc(env(safe-area-inset-top, 0px) + 12px) !important;
+  padding-bottom: 12px !important;
+}
+
+/* 没有 sticky 顶部栏的页面（CelebrityEntryPage / LandingPage 等）整体上推 */
+@supports (padding-top: env(safe-area-inset-top)) {
+  body {
+    padding-top: env(safe-area-inset-top);
+  }
+  /* 但 fixed 全屏遮罩不能受 body padding 影响 */
+  .fixed.inset-0 {
+    top: 0 !important;
+  }
+}
+
+/* 通用返回按钮加大点击区域 */
+button[aria-label='返回'],
+button[data-back-button='true'] {
+  min-height: 44px;
+  min-width: 44px;
+}
+
 @layer utilities {
   .animate-fade-in {
     animation: fadeIn 0.6s ease-out forwards;

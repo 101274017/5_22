@@ -3,8 +3,8 @@
  * 从纯列表升级为数据卡片
  */
 import { useState, useEffect } from 'react'
-import { PageRoute } from '@/App'
-import { guideApi } from '@/api/client'
+import { PageRoute } from '@/types/routes'
+import { listLocalTours, closeLocalTour, type LocalTour } from '@/services/guideEngine'
 import PageHeader from '@/components/PageHeader'
 
 interface TourItem {
@@ -21,34 +21,52 @@ interface TourItem {
 }
 
 interface Props {
+  tenantId: string
   userId: string
   guideName: string
   onNavigate: (route: PageRoute) => void
 }
 
-export default function GuideToursPage({ userId, guideName, onNavigate }: Props) {
+export default function GuideToursPage({ tenantId: _tenantId, userId, guideName, onNavigate }: Props) {
   const [tours, setTours] = useState<TourItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     loadTours()
   }, [])
 
-  const loadTours = async () => {
+  const loadTours = () => {
+    setError(null)
     try {
-      const data = await guideApi.getMyTours(userId)
-      setTours(data)
-    } catch {
-      // 静默处理
+      const data = listLocalTours(userId)
+      setTours(
+        data.map((t: LocalTour) => ({
+          id: t.id,
+          celebrity_name: t.celebrityName,
+          celebrity_age: t.celebrityAge,
+          poi_name: t.poiName,
+          tour_code: t.tourCode,
+          status: t.status,
+          participant_count: 0,
+          description: t.description,
+          created_at: new Date(t.createdAt).toLocaleString('zh-CN'),
+          is_expired: false,
+        }))
+      )
+    } catch (err: unknown) {
+      console.error('加载讲解团列表失败:', err)
+      const msg = err instanceof Error ? err.message : String(err)
+      setError(`加载失败：${msg}`)
     } finally {
       setLoading(false)
     }
   }
 
-  const handleClose = async (tourId: number) => {
+  const handleClose = (tourId: number) => {
     if (!confirm('确定要关闭这个讲解团吗？关闭后游客将无法加入。')) return
     try {
-      await guideApi.closeTour(tourId, userId)
+      closeLocalTour(tourId)
       setTours((prev) => prev.map((t) => (t.id === tourId ? { ...t, status: 'closed' } : t)))
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
@@ -91,6 +109,18 @@ export default function GuideToursPage({ userId, guideName, onNavigate }: Props)
               <div className="text-lg font-bold text-blue-400">{totalParticipants}</div>
               <div className="text-[10px] text-stone-500">总参与人</div>
             </div>
+          </div>
+        )}
+
+        {error && (
+          <div className="bg-red-950/30 border border-red-800/40 rounded-xl p-4 text-center space-y-2">
+            <p className="text-xs text-red-300">{error}</p>
+            <button
+              onClick={loadTours}
+              className="text-xs text-amber-400 border border-amber-700/50 px-3 py-1.5 rounded-lg"
+            >
+              重试
+            </button>
           </div>
         )}
 
@@ -165,7 +195,7 @@ export default function GuideToursPage({ userId, guideName, onNavigate }: Props)
                     })}
                     className="flex-1 text-[11px] text-amber-400 border border-amber-800/40 px-3 py-2 rounded-lg text-center"
                   >
-                    📱 二维码
+                    📱 团码
                   </button>
                   <button
                     onClick={() => handleClose(tour.id)}

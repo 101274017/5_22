@@ -2,15 +2,16 @@
  * 名人对话精神名片页
  */
 import { useState, useEffect } from 'react'
-import { PageRoute } from '@/App'
-import { celebrityApi } from '@/api/client'
+import { PageRoute } from '@/types/routes'
+import { getCelebrityDetail } from '@/services/celebrityEngine'
 
 interface Props {
+  tenantId: string
   encounterId: number
   onNavigate: (route: PageRoute) => void
 }
 
-export default function CelebrityCardPage({ encounterId, onNavigate }: Props) {
+export default function CelebrityCardPage({ tenantId: _tenantId, encounterId, onNavigate }: Props) {
   const [detail, setDetail] = useState<{
     character_name: string
     identity: string
@@ -24,17 +25,19 @@ export default function CelebrityCardPage({ encounterId, onNavigate }: Props) {
     loadDetail()
   }, [])
 
-  const loadDetail = async () => {
+  const loadDetail = () => {
     try {
-      const data = await celebrityApi.getDetail(encounterId)
-      setDetail({
-        character_name: data.character_name,
-        identity: data.identity,
-        gift_words: data.gift_words,
-        badge_name: data.badge_name,
-      })
-    } catch {
-      // 静默处理
+      const data = getCelebrityDetail(encounterId)
+      if (data) {
+        setDetail({
+          character_name: data.character_name,
+          identity: data.identity,
+          gift_words: data.gift_words,
+          badge_name: data.badge_name,
+        })
+      }
+    } catch (err: unknown) {
+      console.error('加载名片详情失败:', err)
     } finally {
       setLoading(false)
     }

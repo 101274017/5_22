@@ -4,8 +4,8 @@
  * P1-8: 语音输入
  */
 import { useState, useEffect, useRef } from 'react'
-import { PageRoute } from '@/App'
-import { guideApi } from '@/api/client'
+import { PageRoute } from '@/types/routes'
+import { getLocalTourByCode, generateNarration } from '@/services/guideEngine'
 import PageHeader from '@/components/PageHeader'
 import GuideLandingPage from '@/pages/GuideLandingPage'
 
@@ -15,12 +15,13 @@ interface ChatMessage {
 }
 
 interface Props {
+  tenantId: string
   userId: string
   tourCode: string
   onNavigate: (route: PageRoute) => void
 }
 
-export default function GuideTourViewPage({ userId, tourCode, onNavigate }: Props) {
+export default function GuideTourViewPage({ tenantId: _tenantId, userId: _userId, tourCode, onNavigate }: Props) {
   const [tourInfo, setTourInfo] = useState<{
     tour_id: number
     guide_name: string
@@ -68,10 +69,22 @@ export default function GuideTourViewPage({ userId, tourCode, onNavigate }: Prop
     }
   }, [])
 
-  const joinTour = async () => {
+  const joinTour = () => {
     try {
-      const data = await guideApi.joinTour({ user_id: userId, tour_code: tourCode })
-      setTourInfo(data)
+      const tour = getLocalTourByCode(tourCode)
+      if (!tour) {
+        alert('讲解团不存在或已关闭')
+        onNavigate({ page: 'home' })
+        return
+      }
+      setTourInfo({
+        tour_id: tour.id,
+        guide_name: tour.guideName,
+        celebrity_name: tour.celebrityName,
+        celebrity_age: tour.celebrityAge,
+        poi_name: tour.poiName,
+        description: tour.description,
+      })
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
       alert(`加入讲解团失败：${msg}`)
@@ -86,9 +99,14 @@ export default function GuideTourViewPage({ userId, tourCode, onNavigate }: Prop
     setShowLanding(false)
     setNarrating(true)
     try {
-      const data = await guideApi.narrate({ tour_id: tourInfo.tour_id, user_id: userId })
-      setMessages([{ role: 'narration', content: data.narration }])
-    } catch {
+      const text = await generateNarration(
+        tourInfo.celebrity_name,
+        tourInfo.poi_name,
+        tourInfo.celebrity_age
+      )
+      setMessages([{ role: 'narration', content: text }])
+    } catch (err: unknown) {
+      console.error('讲解启动失败:', err)
       setMessages([{ role: 'narration', content: '名人正在赶来的路上，请稍后再试...' }])
     } finally {
       setNarrating(false)
@@ -104,13 +122,19 @@ export default function GuideTourViewPage({ userId, tourCode, onNavigate }: Prop
     setMessages((prev) => [...prev, { role: 'user', content: msg }])
 
     try {
-      const data = await guideApi.narrate({
-        tour_id: tourInfo.tour_id,
-        user_id: userId,
-        message: msg,
-      })
-      setMessages((prev) => [...prev, { role: 'narration', content: data.narration }])
-    } catch {
+      const history = messages
+        .filter((m) => m.role === 'user')
+        .map((m) => m.content)
+      const text = await generateNarration(
+        tourInfo.celebrity_name,
+        tourInfo.poi_name,
+        tourInfo.celebrity_age,
+        msg,
+        history
+      )
+      setMessages((prev) => [...prev, { role: 'narration', content: text }])
+    } catch (err: unknown) {
+      console.error('追问失败:', err)
       setMessages((prev) => [
         ...prev,
         { role: 'narration', content: '名人正在思考，请稍后再试...' },

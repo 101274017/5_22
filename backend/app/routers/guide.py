@@ -1,12 +1,13 @@
 """导游讲解团路由"""
 import logging
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.middleware.tenant import get_tenant_id
 from app.models.guide_tour import GuideTour
 from app.schemas.guide import (
     CreateTourRequest,
@@ -21,12 +22,13 @@ from app.ai_client import call_ai, call_ai_with_history
 from app.knowledge_base import get_character_knowledge
 from app.celebrity_engine import research_celebrity, build_celebrity_system_prompt
 from app.strong_links import check_celebrity_poi_link
+from app.utils.bounded_cache import BoundedHistoryCache
 
 logger = logging.getLogger("AncientEncounter")
 router = APIRouter(prefix="/api/v1/guide", tags=["guide"])
 
-# 内存中存储讲解对话历史
-_tour_chat_histories: dict[str, list[dict]] = {}
+# 有界缓存：存储讲解对话历史
+_tour_chat_histories = BoundedHistoryCache[str, list[dict]](maxsize=500)
 
 
 def _generate_tour_code() -> str:
@@ -39,7 +41,6 @@ def _build_narration_system_prompt(celebrity_name: str, celebrity_age: str, poi_
     age_context = f"（{celebrity_age}时期）" if celebrity_age else ""
 
     if knowledge:
-        # 使用内置知识库
         personality_str = "、".join(knowledge.get("personality", []))
         works_str = "\n".join(f"  - {w}" for w in knowledge.get("major_works", [])[:4])
         events_str = "\n".join(f"  - {e}" for e in knowledge.get("life_events", []))
@@ -80,7 +81,6 @@ def _build_narration_system_prompt(celebrity_name: str, celebrity_age: str, poi_
 你只能基于可靠史实回答。若史书记载不一，回答"史料记载存在分歧，较为可信的说法是..."。严禁编造具体年份、对话、未记载事件。若用户问及你的死亡后事件，以"我生前的了解是..."作答。
 """
     else:
-        # 通用提示词
         return f"""你是{celebrity_name}{age_context}。
 你现在正站在{poi_name}，以第一人称视角为游客讲解这个地方。
 
@@ -113,6 +113,7 @@ def check_link(body: dict):
 @router.post("/create-tour", response_model=CreateTourResponse)
 def create_tour(
     req: CreateTourRequest,
+    tenant_id: str = Depends(get_tenant_id),
     db: Session = Depends(get_db),
 ):
     """导游创建讲解团"""
@@ -123,11 +124,11 @@ def create_tour(
 
     tour_code = _generate_tour_code()
 
-    # 确保唯一性
     while db.query(GuideTour).filter(GuideTour.tour_code == tour_code).first():
         tour_code = _generate_tour_code()
 
     tour = GuideTour(
+        tenant_id=tenant_id,
         guide_id=req.guide_id,
         guide_name=req.guide_name,
         celebrity_name=req.celebrity_name,
@@ -136,46 +137,44 @@ def create_tour(
         tour_code=tour_code,
         description=req.description,
         status="active",
-        expire_at=datetime.utcnow() + timedelta(hours=2),
+        expire_at=datetime.now(timezone.utc) + timedelta(hours=2),
     )
     db.add(tour)
     db.commit()
     db.refresh(tour)
 
-    # 生成二维码内容（前端URL）
-    qr_content = f"/guide/join/{tour_code}"
-
-    logger.info(f"【导游创建讲解团】导游={req.guide_name} 名人={req.celebrity_name} 古迹={req.poi_name} code={tour_code}")
+    logger.info(f"【导游创建讲解团】租户={tenant_id} 导游={req.guide_name} 名人={req.celebrity_name} 古迹={req.poi_name} code={tour_code}")
 
     return CreateTourResponse(
         tour_id=tour.id,
         tour_code=tour_code,
-        qr_content=qr_content,
     )
 
 
 @router.post("/join-tour", response_model=JoinTourResponse)
 def join_tour(
     req: JoinTourRequest,
+    tenant_id: str = Depends(get_tenant_id),
     db: Session = Depends(get_db),
 ):
     """游客扫码加入讲解团"""
-    tour = db.query(GuideTour).filter(GuideTour.tour_code == req.tour_code).first()
+    tour = db.query(GuideTour).filter(
+        GuideTour.tour_code == req.tour_code,
+        GuideTour.tenant_id == tenant_id,
+    ).first()
     if not tour:
         raise HTTPException(status_code=404, detail="讲解团不存在或已关闭")
     if tour.status != "active":
         raise HTTPException(status_code=400, detail="该讲解团已结束")
-    # P1-7: 检查是否过期
     if tour.is_expired:
         tour.status = "expired"
         db.commit()
         raise HTTPException(status_code=400, detail="该讲解团已过期（超过2小时）")
 
-    # 增加参与人数
     tour.participant_count += 1
     db.commit()
 
-    logger.info(f"【游客加入讲解团】code={req.tour_code} user={req.user_id} 当前人数={tour.participant_count}")
+    logger.info(f"【游客加入讲解团】租户={tenant_id} code={req.tour_code} user={req.user_id} 当前人数={tour.participant_count}")
 
     return JoinTourResponse(
         tour_id=tour.id,
@@ -190,32 +189,30 @@ def join_tour(
 @router.post("/narrate", response_model=TourNarrateResponse)
 async def narrate_tour(
     req: TourNarrateRequest,
+    tenant_id: str = Depends(get_tenant_id),
     db: Session = Depends(get_db),
 ):
     """名人视角讲解（首次生成开场讲解，后续为追问回答）"""
-    tour = db.query(GuideTour).filter(GuideTour.id == req.tour_id).first()
+    tour = db.query(GuideTour).filter(
+        GuideTour.id == req.tour_id,
+        GuideTour.tenant_id == tenant_id,
+    ).first()
     if not tour:
         raise HTTPException(status_code=404, detail="讲解团不存在")
 
-    # 构建对话 key
     chat_key = f"{tour.id}_{req.user_id}"
-
-    # 获取知识库
     knowledge = get_character_knowledge(tour.celebrity_name)
 
-    # 如果没有内置知识库，尝试用名人研究引擎
     celebrity_data = None
     if not knowledge:
         celebrity_data = await research_celebrity(tour.celebrity_name)
 
-    # 构建系统提示词
     if knowledge:
         system_prompt = _build_narration_system_prompt(
             tour.celebrity_name, tour.celebrity_age, tour.poi_name, knowledge
         )
     elif celebrity_data:
         system_prompt = build_celebrity_system_prompt(celebrity_data)
-        # 追加讲解规则
         system_prompt += f"""
 
 【额外讲解规则】
@@ -229,26 +226,24 @@ async def narrate_tour(
             tour.celebrity_name, tour.celebrity_age, tour.poi_name
         )
 
-    # 获取或初始化对话历史
     history = _tour_chat_histories.get(chat_key, [])
+    if history is None:
+        history = []
 
     if req.message:
-        # 用户追问
         history.append({"role": "user", "content": req.message})
     elif not history:
-        # 首次进入，生成开场讲解
         age_context = f"（{tour.celebrity_age}时期）" if tour.celebrity_age else ""
         first_prompt = f"请以{tour.celebrity_name}{age_context}的身份，为刚到{tour.poi_name}的游客做一段开场讲解。要融入你的个人经历和情感，让游客感受到这个地方的历史韵味和你与此地的渊源。"
         history.append({"role": "user", "content": first_prompt})
 
-    # 调用 AI
     reply = await call_ai_with_history(system_prompt, history[-10:], temperature=0.8)
 
     if not reply:
         raise HTTPException(status_code=503, detail="名人正在酝酿讲解词，请稍后再试。")
 
     history.append({"role": "assistant", "content": reply})
-    _tour_chat_histories[chat_key] = history
+    _tour_chat_histories.set(chat_key, history)
 
     return TourNarrateResponse(
         narration=reply,
@@ -260,12 +255,13 @@ async def narrate_tour(
 @router.get("/my-tours", response_model=List[TourListItem])
 def list_guide_tours(
     guide_id: str = Query(..., description="导游ID"),
+    tenant_id: str = Depends(get_tenant_id),
     db: Session = Depends(get_db),
 ):
     """获取导游创建的所有讲解团"""
     tours = (
         db.query(GuideTour)
-        .filter(GuideTour.guide_id == guide_id)
+        .filter(GuideTour.guide_id == guide_id, GuideTour.tenant_id == tenant_id)
         .order_by(GuideTour.id.desc())
         .all()
     )
@@ -289,6 +285,7 @@ def list_guide_tours(
 @router.post("/close-tour")
 def close_tour(
     body: dict,
+    tenant_id: str = Depends(get_tenant_id),
     db: Session = Depends(get_db),
 ):
     """导游关闭讲解团"""
@@ -301,6 +298,7 @@ def close_tour(
     tour = db.query(GuideTour).filter(
         GuideTour.id == tour_id,
         GuideTour.guide_id == guide_id,
+        GuideTour.tenant_id == tenant_id,
     ).first()
 
     if not tour:
@@ -309,6 +307,6 @@ def close_tour(
     tour.status = "closed"
     db.commit()
 
-    logger.info(f"【导游关闭讲解团】tour_id={tour_id} guide={guide_id}")
+    logger.info(f"【导游关闭讲解团】租户={tenant_id} tour_id={tour_id} guide={guide_id}")
 
     return {"success": True, "message": "讲解团已关闭"}

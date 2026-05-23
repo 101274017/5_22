@@ -2,8 +2,8 @@
  * 精神名片分享页（古迹神交）
  */
 import { useState, useEffect } from 'react'
-import { PageRoute } from '@/App'
-import { encounterApi } from '@/api/client'
+import { PageRoute } from '@/types/routes'
+import { getPoiDetail } from '@/services/encounterEngine'
 
 interface Props {
   tenantId: string
@@ -12,7 +12,7 @@ interface Props {
   onNavigate: (route: PageRoute) => void
 }
 
-export default function ShareCardPage({ tenantId, userId, encounterId, onNavigate }: Props) {
+export default function ShareCardPage({ tenantId: _tenantId, userId: _userId, encounterId, onNavigate }: Props) {
   const [detail, setDetail] = useState<{
     character_name: string
     poi_name: string
@@ -26,12 +26,12 @@ export default function ShareCardPage({ tenantId, userId, encounterId, onNavigat
     loadDetail()
   }, [])
 
-  const loadDetail = async () => {
+  const loadDetail = () => {
     try {
-      const data = await encounterApi.getEncounterDetail(tenantId, userId, encounterId)
-      setDetail(data)
-    } catch {
-      // 静默处理
+      const data = getPoiDetail(encounterId)
+      if (data) setDetail(data)
+    } catch (err: unknown) {
+      console.error('加载名片详情失败:', err)
     } finally {
       setLoading(false)
     }

@@ -3,8 +3,8 @@
  * 展示用户所有的神交记录与精神徽章
  */
 import { useState, useEffect } from 'react'
-import { PageRoute } from '@/App'
-import { encounterApi } from '@/api/client'
+import { PageRoute } from '@/types/routes'
+import { listPoiEncounters } from '@/services/localStore'
 
 interface EncounterRecord {
   id: number
@@ -23,20 +23,35 @@ interface Props {
   onNavigate: (route: PageRoute) => void
 }
 
-export default function GeographyPage({ tenantId, userId, onNavigate }: Props) {
+export default function GeographyPage({ tenantId: _tenantId, userId, onNavigate }: Props) {
   const [records, setRecords] = useState<EncounterRecord[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     loadRecords()
   }, [])
 
-  const loadRecords = async () => {
+  const loadRecords = () => {
+    setError(null)
     try {
-      const data = await encounterApi.getEncounters(tenantId, userId)
-      setRecords(data)
-    } catch {
-      // 静默处理
+      const data = listPoiEncounters(userId)
+      setRecords(
+        data.map((e) => ({
+          id: e.id,
+          character_name: e.characterName,
+          poi_name: e.poiName,
+          question: e.question,
+          user_answer: e.userAnswer,
+          gift_words: e.giftWords,
+          badge_name: e.badgeName,
+          status: e.status,
+        }))
+      )
+    } catch (err: unknown) {
+      console.error('加载神交记录失败:', err)
+      const msg = err instanceof Error ? err.message : String(err)
+      setError(`加载失败：${msg}`)
     } finally {
       setLoading(false)
     }
@@ -46,7 +61,6 @@ export default function GeographyPage({ tenantId, userId, onNavigate }: Props) {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-stone-950 via-stone-900 to-black">
-      {/* 顶部栏 */}
       <div className="sticky top-0 z-10 bg-black/80 backdrop-blur-md border-b border-stone-800/50 px-4 py-3 flex items-center justify-between">
         <button onClick={() => onNavigate({ page: 'home' })} className="text-xs text-stone-500">
           ← 返回
@@ -56,13 +70,11 @@ export default function GeographyPage({ tenantId, userId, onNavigate }: Props) {
       </div>
 
       <div className="px-4 py-6 space-y-6">
-        {/* 统计概览 */}
         <div className="text-center space-y-2">
           <div className="text-3xl font-bold text-amber-400">{completedRecords.length}</div>
           <div className="text-xs text-stone-500 tracking-wider">段跨越千年的缘分</div>
         </div>
 
-        {/* 徽章墙 */}
         {completedRecords.length > 0 && (
           <div className="space-y-2">
             <h3 className="text-[11px] text-stone-500 tracking-widest font-bold">精神徽章</h3>
@@ -77,7 +89,15 @@ export default function GeographyPage({ tenantId, userId, onNavigate }: Props) {
           </div>
         )}
 
-        {/* 记录列表 */}
+        {error && (
+          <div className="bg-red-950/30 border border-red-800/40 rounded-xl p-4 text-center space-y-2">
+            <p className="text-xs text-red-300">{error}</p>
+            <button onClick={loadRecords} className="text-xs text-amber-400 border border-amber-700/50 px-3 py-1.5 rounded-lg">
+              重试
+            </button>
+          </div>
+        )}
+
         {loading ? (
           <div className="text-center py-10">
             <div className="w-8 h-8 border-2 border-stone-700 border-t-stone-300 rounded-full animate-spin mx-auto mb-3" />

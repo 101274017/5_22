@@ -2,40 +2,34 @@
  * 首页
  * P2-10: 角色分流（我是游客 / 我是导游）
  */
-import { useState } from 'react'
-import { PageRoute } from '@/App'
+import { PageRoute } from '@/types/routes'
 import { emitTrackingEvent } from '@/utils/tracker'
+import { POI_COORDS } from '@/data/poiCoords'
 
 interface Props {
   tenantId: string
+  userMode?: 'tourist' | 'guide'
   onNavigate: (route: PageRoute) => void
 }
 
-const POI_LIST = [
-  { name: '惠州西湖', desc: '苏东坡谪居之地', icon: '🏛️' },
-  { name: '断桥', desc: '许仙白娘子相遇处', icon: '🌉' },
-  { name: '罗浮山', desc: '苏东坡游历之山', icon: '⛰️' },
-  { name: '西湖苏堤', desc: '苏东坡筑堤之处', icon: '🌿' },
-]
+const POI_LIST = POI_COORDS.slice(0, 4)
 
-export default function HomePage({ tenantId, onNavigate }: Props) {
-  const [scanning, setScanning] = useState(false)
-
-  const handleScan = () => {
-    emitTrackingEvent('click', 'scan_qrcode', tenantId)
-    setScanning(true)
-    setTimeout(() => {
-      setScanning(false)
-      onNavigate({ page: 'encounter', poiName: '惠州西湖' })
-    }, 1500)
-  }
+export default function HomePage({ tenantId, userMode = 'tourist', onNavigate }: Props) {
+  const isGuide = userMode === 'guide'
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-stone-950 via-stone-900 to-black px-5 py-8">
       {/* 标题 */}
-      <div className="text-center space-y-2 mb-6">
+      <div className="text-center space-y-2 mb-6 relative">
         <h1 className="text-2xl font-bold tracking-widest text-stone-100">此地有古人</h1>
         <p className="text-xs text-stone-500 tracking-wider">跨越千年的时空奇遇</p>
+        <button
+          onClick={() => onNavigate({ page: 'settings' })}
+          aria-label="服务器设置"
+          className="absolute right-0 top-0 w-9 h-9 flex items-center justify-center rounded-full bg-stone-900/60 border border-stone-800 text-stone-400 active:bg-stone-800"
+        >
+          ⚙️
+        </button>
       </div>
 
       {/* P2-10: 双大入口 */}
@@ -48,18 +42,34 @@ export default function HomePage({ tenantId, onNavigate }: Props) {
             🎭
           </div>
           <div className="text-sm font-bold text-amber-100">我是游客</div>
-          <div className="text-[10px] text-amber-300/60">名人对话 · 扫码 · 古迹</div>
+          <div className="text-[10px] text-amber-300/60">名人对话 · 古迹神交</div>
         </button>
 
         <button
-          onClick={() => onNavigate({ page: 'guide-entry' })}
-          className="bg-gradient-to-b from-stone-800/80 to-stone-900/50 border border-stone-600/40 p-4 rounded-2xl active:scale-[0.97] transition-transform text-center space-y-2"
+          onClick={() => isGuide && onNavigate({ page: 'guide-entry' })}
+          disabled={!isGuide}
+          aria-disabled={!isGuide}
+          className={
+            isGuide
+              ? 'bg-gradient-to-b from-amber-900/60 to-amber-950/40 border-2 border-amber-500/70 p-4 rounded-2xl active:scale-[0.97] transition-transform text-center space-y-2 shadow-lg shadow-amber-900/40 ring-2 ring-amber-500/30'
+              : 'bg-gradient-to-b from-stone-800/40 to-stone-900/30 border border-stone-700/40 p-4 rounded-2xl text-center space-y-2 opacity-50 cursor-not-allowed'
+          }
         >
-          <div className="w-12 h-12 bg-stone-700/40 rounded-full mx-auto flex items-center justify-center text-xl border border-stone-600/30">
+          <div
+            className={
+              isGuide
+                ? 'w-12 h-12 bg-amber-900/50 rounded-full mx-auto flex items-center justify-center text-xl border border-amber-400/50'
+                : 'w-12 h-12 bg-stone-700/30 rounded-full mx-auto flex items-center justify-center text-xl border border-stone-600/30 grayscale'
+            }
+          >
             🎙️
           </div>
-          <div className="text-sm font-bold text-stone-100">我是导游</div>
-          <div className="text-[10px] text-stone-400">创建讲解团 · 管理</div>
+          <div className={isGuide ? 'text-sm font-bold text-amber-100' : 'text-sm font-bold text-stone-500'}>
+            我是导游
+          </div>
+          <div className={isGuide ? 'text-[10px] text-amber-300/80' : 'text-[10px] text-stone-600'}>
+            {isGuide ? '创建讲解团 · 管理' : '仅导游模式可用'}
+          </div>
         </button>
       </div>
 
@@ -91,40 +101,14 @@ export default function HomePage({ tenantId, onNavigate }: Props) {
         <div className="flex-1 h-px bg-stone-800" />
       </div>
 
-      {/* 扫码/定位 */}
-      <div className="space-y-3 mb-5">
+      {/* 输入团码 */}
+      <div className="mb-4">
         <button
-          onClick={handleScan}
-          disabled={scanning}
-          className="w-full bg-stone-100 text-stone-900 py-3 rounded-xl font-bold text-sm tracking-wide shadow-lg active:scale-95 transition-transform disabled:opacity-50"
+          onClick={() => onNavigate({ page: 'guide-join' })}
+          className="w-full bg-stone-800 text-stone-200 py-3 rounded-xl font-bold text-sm border border-stone-700 active:scale-95 transition-transform"
         >
-          {scanning ? '正在识别时空坐标...' : '📷 扫描古迹二维码'}
+          🎫 输入团码加入讲解团
         </button>
-
-        <div className="flex gap-2">
-          <button
-            onClick={() => {
-              emitTrackingEvent('click', 'geo_locate', tenantId)
-              if ('geolocation' in navigator) {
-                navigator.geolocation.getCurrentPosition(
-                  () => onNavigate({ page: 'encounter', poiName: '惠州西湖' }),
-                  () => alert('无法获取位置信息，请手动选择古迹')
-                )
-              } else {
-                alert('当前浏览器不支持定位')
-              }
-            }}
-            className="flex-1 bg-stone-800 text-stone-200 py-3 rounded-xl font-bold text-xs border border-stone-700 active:scale-95 transition-transform"
-          >
-            📍 地理定位
-          </button>
-          <button
-            onClick={() => onNavigate({ page: 'guide-join' })}
-            className="flex-1 bg-stone-800 text-stone-200 py-3 rounded-xl font-bold text-xs border border-stone-700 active:scale-95 transition-transform"
-          >
-            🎫 输入团码
-          </button>
-        </div>
       </div>
 
       {/* 分隔线 */}

@@ -1,5 +1,5 @@
 """多租户技术埋点与日志审计模型"""
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, String, Text, DateTime
 from app.database import Base
 
@@ -12,4 +12,4 @@ class TrackingLog(Base):
     event_type = Column(String(50), nullable=False)
     event_key = Column(String(100), nullable=False)
     payload = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

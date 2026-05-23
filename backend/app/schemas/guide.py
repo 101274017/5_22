@@ -15,7 +15,6 @@ class CreateTourRequest(BaseModel):
 class CreateTourResponse(BaseModel):
     tour_id: int
     tour_code: str
-    qr_content: str  # 二维码内容（URL）
 
 
 class JoinTourRequest(BaseModel):

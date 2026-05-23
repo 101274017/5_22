@@ -20,12 +20,13 @@ from app.knowledge_base import (
     build_answer_prompt,
     build_chat_prompt,
 )
+from app.utils.bounded_cache import BoundedHistoryCache
 
 logger = logging.getLogger("AncientEncounter")
 router = APIRouter(prefix="/api/v1/encounter", tags=["encounter"])
 
-# 内存中存储追问对话历史
-_encounter_chat_histories: dict[int, list[dict]] = {}
+# 有界缓存：存储追问对话历史
+_encounter_chat_histories = BoundedHistoryCache[int, list[dict]](maxsize=500)
 
 
 @router.post("/summon", response_model=SummonResponse)
@@ -192,6 +193,8 @@ async def chat_with_ancient(
 
     # 获取或初始化对话历史
     history = _encounter_chat_histories.get(encounter.id, [])
+    if history is None:
+        history = []
     history.append({"role": "user", "content": msg})
 
     system_prompt = build_system_prompt(encounter.character_name, encounter.poi_name)
@@ -211,7 +214,7 @@ async def chat_with_ancient(
         )
 
     history.append({"role": "assistant", "content": ai_reply})
-    _encounter_chat_histories[encounter.id] = history
+    _encounter_chat_histories.set(encounter.id, history)
 
     # 检查防幻觉机制
     defense_keywords = ["未见记载", "非我朝所有", "不敢断言", "无法考证", "未见文献"]

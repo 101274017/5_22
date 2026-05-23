@@ -4,11 +4,12 @@
  * P0-4: 时期选择强制化
  */
 import { useState } from 'react'
-import { PageRoute } from '@/App'
-import { celebrityApi } from '@/api/client'
+import { PageRoute } from '@/types/routes'
+import { startCelebrityChat } from '@/services/celebrityEngine'
 import { getPeriodsForCelebrity, PeriodOption } from '@/data/periods'
 
 interface Props {
+  tenantId: string
   userId: string
   onNavigate: (route: PageRoute) => void
 }
@@ -28,11 +29,10 @@ const PRESET_CELEBRITIES = [
   { name: '麦克阿瑟', desc: '五星上将，太平洋战争', icon: '🎖️' },
 ]
 
-export default function CelebrityEntryPage({ userId, onNavigate }: Props) {
+export default function CelebrityEntryPage({ tenantId: _tenantId, userId, onNavigate }: Props) {
   const [searchInput, setSearchInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [loadingName, setLoadingName] = useState('')
-  // P0-4: 时期选择状态
   const [showPeriodSelect, setShowPeriodSelect] = useState(false)
   const [pendingName, setPendingName] = useState('')
   const [availablePeriods, setAvailablePeriods] = useState<PeriodOption[]>([])
@@ -44,13 +44,13 @@ export default function CelebrityEntryPage({ userId, onNavigate }: Props) {
     setShowPeriodSelect(false)
 
     try {
-      const data = await celebrityApi.start(userId, name)
+      const { encounter, opening } = await startCelebrityChat(userId, name, period)
       onNavigate({
         page: 'celebrity-chat',
-        encounterId: data.encounter_id,
-        celebrityName: data.celebrity_name,
-        opening: data.opening,
-        identity: data.identity,
+        encounterId: encounter.id,
+        celebrityName: encounter.characterName,
+        opening,
+        identity: encounter.identity,
         period,
       })
     } catch (err: unknown) {
@@ -63,7 +63,6 @@ export default function CelebrityEntryPage({ userId, onNavigate }: Props) {
   }
 
   const handleSelectCelebrity = (name: string) => {
-    // P0-4: 检查是否有预设时期
     const periods = getPeriodsForCelebrity(name)
     if (periods && periods.length > 0) {
       setPendingName(name)
@@ -84,7 +83,6 @@ export default function CelebrityEntryPage({ userId, onNavigate }: Props) {
     startChat(pendingName, period.label)
   }
 
-  // P0-4: 时期选择弹窗
   if (showPeriodSelect) {
     return (
       <div className="min-h-screen flex flex-col bg-gradient-to-b from-stone-950 via-stone-900 to-black px-5 py-8">
@@ -130,7 +128,6 @@ export default function CelebrityEntryPage({ userId, onNavigate }: Props) {
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-stone-950 via-stone-900 to-black px-5 py-8">
-      {/* 加载遮罩 */}
       {loading && (
         <div className="fixed inset-0 bg-black/80 z-50 flex flex-col items-center justify-center px-6">
           <div className="w-16 h-16 border-2 border-stone-700 border-t-amber-400 rounded-full animate-spin mb-4" />
@@ -139,7 +136,6 @@ export default function CelebrityEntryPage({ userId, onNavigate }: Props) {
         </div>
       )}
 
-      {/* 顶部栏 */}
       <div className="flex items-center justify-between mb-6">
         <button onClick={() => onNavigate({ page: 'home' })} className="text-xs text-stone-500">
           ← 返回
@@ -148,7 +144,6 @@ export default function CelebrityEntryPage({ userId, onNavigate }: Props) {
         <div className="w-10" />
       </div>
 
-      {/* 搜索框 */}
       <div className="mb-5">
         <div className="flex gap-2">
           <input
@@ -172,14 +167,12 @@ export default function CelebrityEntryPage({ userId, onNavigate }: Props) {
         </p>
       </div>
 
-      {/* 分隔线 */}
       <div className="flex items-center gap-3 mb-4">
         <div className="flex-1 h-px bg-stone-800" />
         <span className="text-[10px] text-stone-600">推荐名人</span>
         <div className="flex-1 h-px bg-stone-800" />
       </div>
 
-      {/* 预设名人列表 */}
       <div className="flex-1 space-y-2 overflow-y-auto">
         {PRESET_CELEBRITIES.map((celeb) => (
           <button
@@ -200,7 +193,6 @@ export default function CelebrityEntryPage({ userId, onNavigate }: Props) {
         ))}
       </div>
 
-      {/* 底部 */}
       <div className="mt-5 text-center">
         <button
           onClick={() => onNavigate({ page: 'celebrity-history' })}

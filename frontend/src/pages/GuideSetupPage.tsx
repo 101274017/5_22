@@ -3,14 +3,15 @@
  * P0-2: 名人-古迹关联校验
  * P0-4: 时期选择强制化
  */
-import { useState } from 'react'
-import { PageRoute } from '@/App'
-import { guideApi } from '@/api/client'
+import { useMemo, useState } from 'react'
+import { PageRoute } from '@/types/routes'
+import { createLocalTour } from '@/services/guideEngine'
 import PageHeader from '@/components/PageHeader'
 import { getPeriodsForCelebrity, PeriodOption } from '@/data/periods'
-import { checkStrongLink } from '@/data/strongLinks'
+import { checkStrongLink, STRONG_LINKS } from '@/data/strongLinks'
 
 interface Props {
+  tenantId: string
   userId: string
   guideName: string
   onNavigate: (route: PageRoute) => void
@@ -25,12 +26,12 @@ const CELEBRITY_SUGGESTIONS = [
   { name: '许仙', era: '南宋' },
 ]
 
-const POI_SUGGESTIONS = [
+const POI_FALLBACK = [
   '惠州西湖', '断桥', '罗浮山', '西湖苏堤', '黄鹤楼', '岳阳楼',
-  '滕王阁', '故宫', '长城', '兵马俑', '莫高窟', '布达拉宫',
+  '滕王阁', '寒山寺', '杜甫草堂', '故宫', '长城', '兵马俑',
 ]
 
-export default function GuideSetupPage({ userId, guideName, onNavigate }: Props) {
+export default function GuideSetupPage({ tenantId: _tenantId, userId, guideName, onNavigate }: Props) {
   const [celebrityName, setCelebrityName] = useState('')
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodOption | null>(null)
   const [customAge, setCustomAge] = useState('')
@@ -43,7 +44,15 @@ export default function GuideSetupPage({ userId, guideName, onNavigate }: Props)
   const periods = getPeriodsForCelebrity(celebrityName)
   const hasPeriods = periods && periods.length > 0
 
-  // 判断时期是否已选（有预设时期的必须选，没有的可以自定义）
+  const poiSuggestions = useMemo(() => {
+    const trimmed = celebrityName.trim()
+    if (!trimmed) return POI_FALLBACK
+    const linked = STRONG_LINKS[trimmed]
+    if (linked && linked.length > 0) return linked
+    return POI_FALLBACK
+  }, [celebrityName])
+  const poiSuggestionsAreCurated = !!STRONG_LINKS[celebrityName.trim()]
+
   const periodSelected = hasPeriods ? !!selectedPeriod : true
   const celebrityAge = selectedPeriod?.label || customAge
 
@@ -55,8 +64,22 @@ export default function GuideSetupPage({ userId, guideName, onNavigate }: Props)
     setCustomAge('')
     setLinkWarning(null)
     setLinkConfirmed(false)
-    // 如果已选古迹，检查关联
-    if (poiName.trim()) {
+    const trimmed = name.trim()
+    const linked = trimmed ? STRONG_LINKS[trimmed] : undefined
+    if (poiName.trim() && linked && linked.length > 0) {
+      const stillMatches = linked.some(
+        (p) => p.includes(poiName.trim()) || poiName.trim().includes(p)
+      )
+      if (!stillMatches) {
+        setPoiName('')
+      } else {
+        const result = checkStrongLink(name, poiName.trim())
+        if (!result.isStrong) {
+          setLinkWarning(result.message)
+          setLinkConfirmed(false)
+        }
+      }
+    } else if (poiName.trim()) {
       const result = checkStrongLink(name, poiName.trim())
       if (!result.isStrong) {
         setLinkWarning(result.message)
@@ -69,7 +92,6 @@ export default function GuideSetupPage({ userId, guideName, onNavigate }: Props)
     setPoiName(poi)
     setLinkWarning(null)
     setLinkConfirmed(false)
-    // 检查关联
     if (celebrityName.trim()) {
       const result = checkStrongLink(celebrityName.trim(), poi)
       if (!result.isStrong) {
@@ -84,19 +106,19 @@ export default function GuideSetupPage({ userId, guideName, onNavigate }: Props)
     setCreating(true)
 
     try {
-      const data = await guideApi.createTour({
-        guide_id: userId,
-        guide_name: guideName,
-        celebrity_name: celebrityName.trim(),
-        celebrity_age: celebrityAge || undefined,
-        poi_name: poiName.trim(),
+      const tour = createLocalTour({
+        guideId: userId,
+        guideName,
+        celebrityName: celebrityName.trim(),
+        celebrityAge: celebrityAge || undefined,
+        poiName: poiName.trim(),
         description: description.trim() || undefined,
       })
 
       onNavigate({
         page: 'guide-qrcode',
-        tourId: data.tour_id,
-        tourCode: data.tour_code,
+        tourId: tour.id,
+        tourCode: tour.tourCode,
         celebrityName: celebrityName.trim(),
         poiName: poiName.trim(),
         guideName,
@@ -114,7 +136,6 @@ export default function GuideSetupPage({ userId, guideName, onNavigate }: Props)
       <PageHeader title="创建讲解团" onBack={() => onNavigate({ page: 'guide-entry' })} />
 
       <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
-        {/* 名人选择 */}
         <div className="space-y-2">
           <label className="text-xs text-stone-400 font-bold tracking-wider">名人是谁 *</label>
           <input
@@ -141,7 +162,6 @@ export default function GuideSetupPage({ userId, guideName, onNavigate }: Props)
           </div>
         </div>
 
-        {/* P0-4: 时期选择（强制） */}
         <div className="space-y-2">
           <label className="text-xs text-stone-400 font-bold tracking-wider">
             时期/年龄 {hasPeriods ? '*' : '（可选）'}
@@ -186,18 +206,30 @@ export default function GuideSetupPage({ userId, guideName, onNavigate }: Props)
           )}
         </div>
 
-        {/* 名胜古迹 */}
         <div className="space-y-2">
           <label className="text-xs text-stone-400 font-bold tracking-wider">名胜古迹 *</label>
           <input
             type="text"
             value={poiName}
             onChange={(e) => handlePoiChange(e.target.value)}
-            placeholder="输入名胜古迹名称"
+            placeholder={
+              celebrityName.trim()
+                ? `输入或从下方推荐中选择${celebrityName.trim()}相关的古迹`
+                : '输入名胜古迹名称'
+            }
             className="w-full bg-stone-900 border border-stone-700 rounded-xl px-4 py-3 text-sm text-stone-200 placeholder:text-stone-600 focus:outline-none focus:border-amber-700"
           />
-          <div className="flex flex-wrap gap-2 mt-2">
-            {POI_SUGGESTIONS.map((poi) => (
+          <div className="flex items-center justify-between mt-2">
+            <span className="text-[10px] text-stone-500 tracking-wider">
+              {poiSuggestionsAreCurated
+                ? `🎯 与「${celebrityName.trim()}」强关联的古迹`
+                : celebrityName.trim()
+                  ? '通用古迹推荐（未找到匹配数据）'
+                  : '请先选择名人，将自动推荐相关古迹'}
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-2 mt-1">
+            {poiSuggestions.map((poi) => (
               <button
                 key={poi}
                 onClick={() => handlePoiChange(poi)}
@@ -213,7 +245,6 @@ export default function GuideSetupPage({ userId, guideName, onNavigate }: Props)
           </div>
         </div>
 
-        {/* P0-2: 关联度警告 */}
         {linkWarning && (
           <div className="bg-red-950/30 border border-red-800/40 rounded-xl p-3 space-y-2">
             <p className="text-xs text-red-300">⚠️ {linkWarning}</p>
@@ -230,7 +261,6 @@ export default function GuideSetupPage({ userId, guideName, onNavigate }: Props)
           </div>
         )}
 
-        {/* 讲解团描述 */}
         <div className="space-y-2">
           <label className="text-xs text-stone-400 font-bold tracking-wider">讲解团描述（可选）</label>
           <textarea
@@ -242,7 +272,6 @@ export default function GuideSetupPage({ userId, guideName, onNavigate }: Props)
           />
         </div>
 
-        {/* 预览 */}
         {celebrityName && poiName && (
           <div className="bg-stone-900/60 border border-amber-900/30 rounded-2xl p-4 space-y-2">
             <div className="text-[10px] text-amber-500 font-bold tracking-widest">讲解预览</div>
@@ -255,13 +284,12 @@ export default function GuideSetupPage({ userId, guideName, onNavigate }: Props)
           </div>
         )}
 
-        {/* 创建按钮 */}
         <button
           onClick={handleCreate}
           disabled={!canCreate || creating}
           className="w-full bg-amber-800 text-amber-100 py-3.5 rounded-xl font-bold text-sm active:scale-95 transition-transform disabled:opacity-40"
         >
-          {creating ? '正在创建...' : '创建讲解团并生成二维码'}
+          {creating ? '正在创建...' : '创建讲解团'}
         </button>
       </div>
     </div>

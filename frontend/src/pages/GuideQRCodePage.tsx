@@ -1,12 +1,12 @@
 /**
- * 导游二维码展示页：展示讲解团二维码供游客扫描
+ * 导游讲解团码展示页：展示讲解团码供游客输入加入
  */
-import { useState, useEffect, useRef } from 'react'
-import QRCode from 'qrcode'
-import { PageRoute } from '@/App'
+import { useState } from 'react'
+import { PageRoute } from '@/types/routes'
 import PageHeader from '@/components/PageHeader'
 
 interface Props {
+  tenantId: string
   tourId: number
   tourCode: string
   celebrityName: string
@@ -16,36 +16,20 @@ interface Props {
 }
 
 export default function GuideQRCodePage({
+  tenantId: _tenantId,
   tourCode,
   celebrityName,
   poiName,
   guideName,
   onNavigate,
 }: Props) {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
   const [copied, setCopied] = useState(false)
-
-  useEffect(() => {
-    if (canvasRef.current) {
-      // 生成二维码内容：包含讲解团码
-      const qrContent = `${window.location.origin}/#/guide/join/${tourCode}`
-      QRCode.toCanvas(canvasRef.current, qrContent, {
-        width: 240,
-        margin: 2,
-        color: {
-          dark: '#1c1917',
-          light: '#fef3c7',
-        },
-      })
-    }
-  }, [tourCode])
 
   const handleCopyCode = () => {
     navigator.clipboard.writeText(tourCode).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     }).catch(() => {
-      // 降级：选中文本
       const input = document.createElement('input')
       input.value = tourCode
       document.body.appendChild(input)
@@ -58,7 +42,7 @@ export default function GuideQRCodePage({
   }
 
   const handleShare = async () => {
-    const shareText = `🎙️ ${guideName}导游邀请您加入讲解团\n\n📍 ${poiName}\n👤 ${celebrityName} 为您讲解\n\n讲解团码：${tourCode}\n\n打开「此地有古人」App，扫描二维码或输入讲解团码即可加入。`
+    const shareText = `🎙️ ${guideName}导游邀请您加入讲解团\n\n📍 ${poiName}\n👤 ${celebrityName} 为您讲解\n\n讲解团码：${tourCode}\n\n打开「此地有古人」App，输入讲解团码即可加入。`
 
     if (navigator.share) {
       try {
@@ -75,24 +59,20 @@ export default function GuideQRCodePage({
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-stone-950 via-stone-900 to-black">
-      <PageHeader title="讲解团二维码" onBack={() => onNavigate({ page: 'guide-entry' })} />
+      <PageHeader title="讲解团码" onBack={() => onNavigate({ page: 'guide-entry' })} />
 
       <div className="flex-1 px-5 py-6 flex flex-col items-center space-y-6">
         {/* 成功提示 */}
         <div className="text-center space-y-1">
           <div className="text-2xl mb-2">✅</div>
           <h2 className="text-base font-bold text-stone-100">讲解团创建成功</h2>
-          <p className="text-xs text-stone-500">让游客扫描下方二维码加入</p>
+          <p className="text-xs text-stone-500">让游客输入下方讲解团码加入</p>
         </div>
 
-        {/* 二维码卡片 */}
+        {/* 团码卡片 */}
         <div className="bg-gradient-to-b from-amber-50 to-amber-100 rounded-3xl p-6 shadow-2xl space-y-4 w-full max-w-[300px]">
           <div className="text-center">
             <div className="text-xs text-stone-600 font-bold tracking-wider">此地有古人 · 导游讲解</div>
-          </div>
-
-          <div className="flex justify-center">
-            <canvas ref={canvasRef} className="rounded-xl" />
           </div>
 
           <div className="text-center space-y-1">

@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.middleware.tenant import get_tenant_id
 from app.models import Encounter
 from app.ai_client import call_ai_with_history
 from app.celebrity_engine import (
@@ -14,12 +15,13 @@ from app.celebrity_engine import (
     get_cached_celebrity,
 )
 from app.disambiguation import check_disambiguation, resolve_alias
+from app.utils.bounded_cache import BoundedHistoryCache
 
 logger = logging.getLogger("AncientEncounter")
 router = APIRouter(prefix="/api/v1/celebrity", tags=["celebrity"])
 
-# 内存中存储对话历史
-_chat_histories: dict[int, list[dict]] = {}
+# 有界缓存：存储名人对话历史
+_chat_histories = BoundedHistoryCache[int, list[dict]](maxsize=500)
 
 
 @router.post("/check-disambiguation")
@@ -42,6 +44,7 @@ def check_celebrity_disambiguation(body: dict):
 @router.post("/start")
 async def start_celebrity_chat(
     body: dict,
+    tenant_id: str = Depends(get_tenant_id),
     db: Session = Depends(get_db),
 ):
     """
@@ -68,9 +71,9 @@ async def start_celebrity_chat(
     if not opening:
         raise HTTPException(status_code=503, detail="名人正在穿越时空，请稍后再试。")
 
-    # 创建对话记录
+    # 创建对话记录（使用真实租户ID）
     encounter = Encounter(
-        tenant_id="celebrity_chat",
+        tenant_id=tenant_id,
         user_id=user_id,
         character_name=celebrity_name,
         poi_name=celebrity_data.get("identity", "名人"),
@@ -82,9 +85,9 @@ async def start_celebrity_chat(
     db.refresh(encounter)
 
     # 初始化对话历史
-    _chat_histories[encounter.id] = [
+    _chat_histories.set(encounter.id, [
         {"role": "assistant", "content": opening}
-    ]
+    ])
 
     logger.info(f"【名人对话开始】{celebrity_name} encounter_id={encounter.id}")
 
@@ -100,6 +103,7 @@ async def start_celebrity_chat(
 @router.post("/chat")
 async def chat_with_celebrity(
     body: dict,
+    tenant_id: str = Depends(get_tenant_id),
     db: Session = Depends(get_db),
 ):
     """
@@ -113,9 +117,12 @@ async def chat_with_celebrity(
     if not encounter_id or not message:
         raise HTTPException(status_code=400, detail="参数不完整")
 
-    encounter = db.query(Encounter).filter(Encounter.id == encounter_id).first()
+    encounter = db.query(Encounter).filter(
+        Encounter.id == encounter_id,
+        Encounter.tenant_id == tenant_id,
+    ).first()
     if not encounter:
-        raise HTTPException(status_code=404, detail="对话记录不存在")
+        raise HTTPException(status_code=404, detail="对话记录不存在或无权访问")
 
     # 获取名人资料
     celebrity_data = get_cached_celebrity(encounter.character_name)
@@ -126,6 +133,8 @@ async def chat_with_celebrity(
 
     # 获取对话历史
     history = _chat_histories.get(encounter_id, [])
+    if history is None:
+        history = []
     history.append({"role": "user", "content": message})
 
     # 构建系统提示词并调用 AI
@@ -137,7 +146,7 @@ async def chat_with_celebrity(
         raise HTTPException(status_code=503, detail="名人正在思考，请稍后再试。")
 
     history.append({"role": "assistant", "content": reply})
-    _chat_histories[encounter_id] = history
+    _chat_histories.set(encounter_id, history)
 
     user_message_count = sum(1 for msg in history if msg["role"] == "user")
 
@@ -150,6 +159,7 @@ async def chat_with_celebrity(
 @router.post("/generate-card")
 async def generate_celebrity_card(
     body: dict,
+    tenant_id: str = Depends(get_tenant_id),
     db: Session = Depends(get_db),
 ):
     """
@@ -160,11 +170,16 @@ async def generate_celebrity_card(
     if not encounter_id:
         raise HTTPException(status_code=400, detail="参数不完整")
 
-    encounter = db.query(Encounter).filter(Encounter.id == encounter_id).first()
+    encounter = db.query(Encounter).filter(
+        Encounter.id == encounter_id,
+        Encounter.tenant_id == tenant_id,
+    ).first()
     if not encounter:
-        raise HTTPException(status_code=404, detail="对话记录不存在")
+        raise HTTPException(status_code=404, detail="对话记录不存在或无权访问")
 
     history = _chat_histories.get(encounter_id, [])
+    if history is None:
+        history = []
     user_message_count = sum(1 for msg in history if msg["role"] == "user")
 
     if user_message_count < 2:
@@ -200,12 +215,13 @@ async def generate_celebrity_card(
 @router.get("/list")
 def list_celebrity_encounters(
     user_id: str = Query(..., description="用户ID"),
+    tenant_id: str = Depends(get_tenant_id),
     db: Session = Depends(get_db),
 ):
     """获取用户的名人对话记录"""
     encounters = (
         db.query(Encounter)
-        .filter(Encounter.user_id == user_id, Encounter.tenant_id == "celebrity_chat")
+        .filter(Encounter.user_id == user_id, Encounter.tenant_id == tenant_id)
         .order_by(Encounter.id.desc())
         .all()
     )
@@ -225,10 +241,14 @@ def list_celebrity_encounters(
 @router.get("/{encounter_id}")
 def get_celebrity_detail(
     encounter_id: int,
+    tenant_id: str = Depends(get_tenant_id),
     db: Session = Depends(get_db),
 ):
     """获取名人对话详情"""
-    encounter = db.query(Encounter).filter(Encounter.id == encounter_id).first()
+    encounter = db.query(Encounter).filter(
+        Encounter.id == encounter_id,
+        Encounter.tenant_id == tenant_id,
+    ).first()
     if not encounter:
         raise HTTPException(status_code=404, detail="未找到此段对话记录")
 

@@ -2,15 +2,16 @@
  * 游客输入讲解团码加入页
  */
 import { useState } from 'react'
-import { PageRoute } from '@/App'
+import { PageRoute } from '@/types/routes'
 import PageHeader from '@/components/PageHeader'
 
 interface Props {
+  tenantId: string
   onNavigate: (route: PageRoute) => void
   initialCode?: string
 }
 
-export default function GuideJoinPage({ onNavigate, initialCode = '' }: Props) {
+export default function GuideJoinPage({ tenantId: _tenantId, onNavigate, initialCode = '' }: Props) {
   const [code, setCode] = useState(initialCode)
 
   const handleJoin = () => {
