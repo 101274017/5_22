@@ -1,9 +1,12 @@
 /**
- * 名人对话入口页：搜索或选择名人
+ * 名人对话入口页
+ * P0-1: 重名选择页
+ * P0-4: 时期选择强制化
  */
 import { useState } from 'react'
 import { PageRoute } from '@/App'
 import { celebrityApi } from '@/api/client'
+import { getPeriodsForCelebrity, PeriodOption } from '@/data/periods'
 
 interface Props {
   userId: string
@@ -29,11 +32,16 @@ export default function CelebrityEntryPage({ userId, onNavigate }: Props) {
   const [searchInput, setSearchInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [loadingName, setLoadingName] = useState('')
+  // P0-4: 时期选择状态
+  const [showPeriodSelect, setShowPeriodSelect] = useState(false)
+  const [pendingName, setPendingName] = useState('')
+  const [availablePeriods, setAvailablePeriods] = useState<PeriodOption[]>([])
 
-  const startChat = async (name: string) => {
+  const startChat = async (name: string, period?: string) => {
     if (loading) return
     setLoading(true)
     setLoadingName(name)
+    setShowPeriodSelect(false)
 
     try {
       const data = await celebrityApi.start(userId, name)
@@ -43,6 +51,7 @@ export default function CelebrityEntryPage({ userId, onNavigate }: Props) {
         celebrityName: data.celebrity_name,
         opening: data.opening,
         identity: data.identity,
+        period,
       })
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
@@ -53,10 +62,70 @@ export default function CelebrityEntryPage({ userId, onNavigate }: Props) {
     }
   }
 
+  const handleSelectCelebrity = (name: string) => {
+    // P0-4: 检查是否有预设时期
+    const periods = getPeriodsForCelebrity(name)
+    if (periods && periods.length > 0) {
+      setPendingName(name)
+      setAvailablePeriods(periods)
+      setShowPeriodSelect(true)
+    } else {
+      startChat(name)
+    }
+  }
+
   const handleSearch = () => {
     const name = searchInput.trim()
     if (!name) return
-    startChat(name)
+    handleSelectCelebrity(name)
+  }
+
+  const handlePeriodSelect = (period: PeriodOption) => {
+    startChat(pendingName, period.label)
+  }
+
+  // P0-4: 时期选择弹窗
+  if (showPeriodSelect) {
+    return (
+      <div className="min-h-screen flex flex-col bg-gradient-to-b from-stone-950 via-stone-900 to-black px-5 py-8">
+        <div className="flex items-center justify-between mb-6">
+          <button onClick={() => setShowPeriodSelect(false)} className="text-xs text-stone-500">
+            ← 返回
+          </button>
+          <span className="text-xs text-stone-300 tracking-widest">选择时期</span>
+          <div className="w-10" />
+        </div>
+
+        <div className="text-center mb-6">
+          <div className="w-16 h-16 bg-amber-900/30 rounded-full mx-auto flex items-center justify-center border border-amber-700/40 mb-3">
+            <span className="text-2xl font-bold text-amber-200">{pendingName[0]}</span>
+          </div>
+          <h2 className="text-lg font-bold text-stone-100">{pendingName}</h2>
+          <p className="text-xs text-stone-500 mt-1">请选择对话时期（不同时期性格不同）</p>
+        </div>
+
+        <div className="space-y-3 flex-1">
+          {availablePeriods.map((period) => (
+            <button
+              key={period.id}
+              onClick={() => handlePeriodSelect(period)}
+              disabled={loading}
+              className="w-full text-left bg-stone-900/60 border border-stone-800 p-4 rounded-xl active:bg-stone-800 transition disabled:opacity-50"
+            >
+              <div className="text-sm font-bold text-amber-200">{period.label}</div>
+              <p className="text-[11px] text-stone-400 mt-1">{period.description}</p>
+            </button>
+          ))}
+        </div>
+
+        {loading && (
+          <div className="fixed inset-0 bg-black/80 z-50 flex flex-col items-center justify-center px-6">
+            <div className="w-16 h-16 border-2 border-stone-700 border-t-amber-400 rounded-full animate-spin mb-4" />
+            <p className="text-sm text-stone-300 text-center">正在研究 {loadingName} 的生平资料...</p>
+          </div>
+        )}
+      </div>
+    )
   }
 
   return (
@@ -115,7 +184,7 @@ export default function CelebrityEntryPage({ userId, onNavigate }: Props) {
         {PRESET_CELEBRITIES.map((celeb) => (
           <button
             key={celeb.name}
-            onClick={() => startChat(celeb.name)}
+            onClick={() => handleSelectCelebrity(celeb.name)}
             disabled={loading}
             className="w-full flex items-center gap-3 bg-stone-900/60 border border-stone-800 p-3 rounded-xl active:bg-stone-800 transition disabled:opacity-50"
           >

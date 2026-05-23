@@ -146,6 +146,8 @@ export const guideApi = {
       status: string
       participant_count: number
       description?: string
+      created_at?: string
+      is_expired?: boolean
     }>>(`/guide/my-tours?guide_id=${encodeURIComponent(guideId)}`, { method: 'GET' })
   },
 
@@ -155,11 +157,36 @@ export const guideApi = {
       { body: { tour_id: tourId, guide_id: guideId } }
     )
   },
+
+  checkLink(celebrityName: string, poiName: string) {
+    return request<{ is_strong: boolean; message: string | null }>(
+      '/guide/check-link',
+      { body: { celebrity_name: celebrityName, poi_name: poiName } }
+    )
+  },
 }
 
 // ============ 名人对话 API ============
 
 export const celebrityApi = {
+  checkDisambiguation(celebrityName: string) {
+    return request<{
+      needs_selection: boolean
+      candidates: Array<{
+        id: string
+        name: string
+        birth_year: number
+        death_year: number
+        identity: string
+        label: string
+        alias?: string
+      }> | null
+      resolved_name?: string
+    }>('/celebrity/check-disambiguation', {
+      body: { celebrity_name: celebrityName },
+    })
+  },
+
   start(userId: string, celebrityName: string) {
     return request<{
       encounter_id: number

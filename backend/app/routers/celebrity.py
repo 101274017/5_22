@@ -13,12 +13,30 @@ from app.celebrity_engine import (
     generate_card_summary,
     get_cached_celebrity,
 )
+from app.disambiguation import check_disambiguation, resolve_alias
 
 logger = logging.getLogger("AncientEncounter")
 router = APIRouter(prefix="/api/v1/celebrity", tags=["celebrity"])
 
 # 内存中存储对话历史
 _chat_histories: dict[int, list[dict]] = {}
+
+
+@router.post("/check-disambiguation")
+def check_celebrity_disambiguation(body: dict):
+    """
+    P0-1: 检查名人是否需要消歧义选择
+    body: { "celebrity_name": str }
+    返回: { "needs_selection": bool, "candidates": list | null }
+    """
+    name = body.get("celebrity_name", "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="请输入名人名字")
+
+    candidates = check_disambiguation(name)
+    if candidates and len(candidates) > 1:
+        return {"needs_selection": True, "candidates": candidates}
+    return {"needs_selection": False, "candidates": None, "resolved_name": resolve_alias(name)}
 
 
 @router.post("/start")

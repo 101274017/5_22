@@ -1,10 +1,13 @@
 /**
- * 游客讲解团体验页：扫码加入后，听名人讲解古迹
+ * 游客讲解团体验页
+ * P1-6: 扫码落地页（仪式感）
+ * P1-8: 语音输入
  */
 import { useState, useEffect, useRef } from 'react'
 import { PageRoute } from '@/App'
 import { guideApi } from '@/api/client'
 import PageHeader from '@/components/PageHeader'
+import GuideLandingPage from '@/pages/GuideLandingPage'
 
 interface ChatMessage {
   role: 'narration' | 'user'
@@ -26,12 +29,16 @@ export default function GuideTourViewPage({ userId, tourCode, onNavigate }: Prop
     poi_name: string
     description?: string
   } | null>(null)
+  const [showLanding, setShowLanding] = useState(true)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [narrating, setNarrating] = useState(false)
+  const [isRecording, setIsRecording] = useState(false)
+  const [speechSupported, setSpeechSupported] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
+  const recognitionRef = useRef<any>(null)
 
   useEffect(() => {
     joinTour()
@@ -41,12 +48,30 @@ export default function GuideTourViewPage({ userId, tourCode, onNavigate }: Prop
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  // 语音识别初始化
+  useEffect(() => {
+    const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition
+    if (SpeechRecognition) {
+      setSpeechSupported(true)
+      const recognition = new SpeechRecognition()
+      recognition.lang = 'zh-CN'
+      recognition.continuous = false
+      recognition.interimResults = false
+      recognition.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript
+        setInput((prev) => prev + transcript)
+        setIsRecording(false)
+      }
+      recognition.onerror = () => setIsRecording(false)
+      recognition.onend = () => setIsRecording(false)
+      recognitionRef.current = recognition
+    }
+  }, [])
+
   const joinTour = async () => {
     try {
       const data = await guideApi.joinTour({ user_id: userId, tour_code: tourCode })
       setTourInfo(data)
-      // 自动获取首次讲解
-      await getFirstNarration(data.tour_id)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
       alert(`加入讲解团失败：${msg}`)
@@ -56,10 +81,12 @@ export default function GuideTourViewPage({ userId, tourCode, onNavigate }: Prop
     }
   }
 
-  const getFirstNarration = async (tourId: number) => {
+  const startNarration = async () => {
+    if (!tourInfo) return
+    setShowLanding(false)
     setNarrating(true)
     try {
-      const data = await guideApi.narrate({ tour_id: tourId, user_id: userId })
+      const data = await guideApi.narrate({ tour_id: tourInfo.tour_id, user_id: userId })
       setMessages([{ role: 'narration', content: data.narration }])
     } catch {
       setMessages([{ role: 'narration', content: '名人正在赶来的路上，请稍后再试...' }])
@@ -93,6 +120,18 @@ export default function GuideTourViewPage({ userId, tourCode, onNavigate }: Prop
     }
   }
 
+  const handleVoiceStart = () => {
+    if (!recognitionRef.current) return
+    setIsRecording(true)
+    recognitionRef.current.start()
+  }
+
+  const handleVoiceStop = () => {
+    if (!recognitionRef.current) return
+    recognitionRef.current.stop()
+    setIsRecording(false)
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-black via-stone-950 to-black px-6">
@@ -103,6 +142,17 @@ export default function GuideTourViewPage({ userId, tourCode, onNavigate }: Prop
   }
 
   if (!tourInfo) return null
+
+  // P1-6: 落地页
+  if (showLanding) {
+    return (
+      <GuideLandingPage
+        tourInfo={tourInfo}
+        onStart={startNarration}
+        onNavigate={onNavigate}
+      />
+    )
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-stone-950 via-stone-900 to-black">
@@ -190,9 +240,24 @@ export default function GuideTourViewPage({ userId, tourCode, onNavigate }: Prop
         <div ref={chatEndRef} />
       </div>
 
-      {/* 底部追问栏 */}
+      {/* 底部追问栏 + P1-8 语音 */}
       <div className="sticky bottom-0 bg-black/90 backdrop-blur-md border-t border-stone-800 px-4 py-3 shrink-0">
         <div className="flex gap-2 items-center">
+          {speechSupported && (
+            <button
+              onMouseDown={handleVoiceStart}
+              onMouseUp={handleVoiceStop}
+              onTouchStart={handleVoiceStart}
+              onTouchEnd={handleVoiceStop}
+              className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition ${
+                isRecording
+                  ? 'bg-red-600 animate-pulse shadow-lg shadow-red-600/30'
+                  : 'bg-stone-800 border border-stone-700'
+              }`}
+            >
+              <span className="text-sm">{isRecording ? '🔴' : '🎙️'}</span>
+            </button>
+          )}
           <input
             type="text"
             value={input}

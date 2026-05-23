@@ -28,3 +28,66 @@ body {
     transform: translateY(0);
   }
 }
+
+/* P2-12: 演示专用高对比度模式 */
+.demo-mode {
+  background-color: #f5f0e8 !important;
+}
+
+.demo-mode * {
+  --tw-text-opacity: 1;
+}
+
+.demo-mode .bg-gradient-to-b,
+.demo-mode .bg-black,
+.demo-mode .bg-stone-950,
+.demo-mode .bg-stone-900 {
+  background: #f5f0e8 !important;
+}
+
+.demo-mode .from-stone-950,
+.demo-mode .via-stone-900,
+.demo-mode .to-black {
+  --tw-gradient-from: #f5f0e8 !important;
+  --tw-gradient-via: #ede8df !important;
+  --tw-gradient-to: #f5f0e8 !important;
+}
+
+.demo-mode .text-stone-100,
+.demo-mode .text-stone-200 {
+  color: #3d2b1f !important;
+}
+
+.demo-mode .text-stone-300,
+.demo-mode .text-stone-400 {
+  color: #5c4033 !important;
+}
+
+.demo-mode .text-stone-500,
+.demo-mode .text-stone-600 {
+  color: #7a5c47 !important;
+}
+
+.demo-mode .text-amber-100,
+.demo-mode .text-amber-200 {
+  color: #6b3a0a !important;
+}
+
+.demo-mode .border-stone-800,
+.demo-mode .border-stone-700 {
+  border-color: #c4b5a0 !important;
+}
+
+.demo-mode .bg-stone-900\/60,
+.demo-mode .bg-stone-900\/80 {
+  background: #ede8df !important;
+}
+
+.demo-mode .bg-amber-800,
+.demo-mode .bg-amber-900\/50 {
+  background: #92400e !important;
+}
+
+.demo-mode .bg-black\/80 {
+  background: rgba(245, 240, 232, 0.95) !important;
+}

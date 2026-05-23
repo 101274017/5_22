@@ -1,7 +1,6 @@
 /**
- * 首页：两大功能入口
- * 1. 此地有古人（地理围栏/扫码 -> 古迹神交）
- * 2. 名人对话（搜索任意名人 -> AI 模拟对话）
+ * 首页
+ * P2-10: 角色分流（我是游客 / 我是导游）
  */
 import { useState } from 'react'
 import { PageRoute } from '@/App'
@@ -39,7 +38,32 @@ export default function HomePage({ tenantId, onNavigate }: Props) {
         <p className="text-xs text-stone-500 tracking-wider">跨越千年的时空奇遇</p>
       </div>
 
-      {/* 功能区一：名人对话（新功能，突出展示） */}
+      {/* P2-10: 双大入口 */}
+      <div className="grid grid-cols-2 gap-3 mb-5">
+        <button
+          onClick={() => onNavigate({ page: 'celebrity-entry' })}
+          className="bg-gradient-to-b from-amber-900/50 to-amber-950/30 border border-amber-700/40 p-4 rounded-2xl active:scale-[0.97] transition-transform text-center space-y-2"
+        >
+          <div className="w-12 h-12 bg-amber-900/40 rounded-full mx-auto flex items-center justify-center text-xl border border-amber-600/30">
+            🎭
+          </div>
+          <div className="text-sm font-bold text-amber-100">我是游客</div>
+          <div className="text-[10px] text-amber-300/60">名人对话 · 扫码 · 古迹</div>
+        </button>
+
+        <button
+          onClick={() => onNavigate({ page: 'guide-entry' })}
+          className="bg-gradient-to-b from-stone-800/80 to-stone-900/50 border border-stone-600/40 p-4 rounded-2xl active:scale-[0.97] transition-transform text-center space-y-2"
+        >
+          <div className="w-12 h-12 bg-stone-700/40 rounded-full mx-auto flex items-center justify-center text-xl border border-stone-600/30">
+            🎙️
+          </div>
+          <div className="text-sm font-bold text-stone-100">我是导游</div>
+          <div className="text-[10px] text-stone-400">创建讲解团 · 管理</div>
+        </button>
+      </div>
+
+      {/* 名人对话入口（突出） */}
       <div className="mb-4">
         <button
           onClick={() => onNavigate({ page: 'celebrity-entry' })}
@@ -60,27 +84,6 @@ export default function HomePage({ tenantId, onNavigate }: Props) {
         </button>
       </div>
 
-      {/* 功能区：导游讲解 */}
-      <div className="mb-6">
-        <button
-          onClick={() => onNavigate({ page: 'guide-entry' })}
-          className="w-full bg-gradient-to-r from-stone-800/80 to-stone-700/40 border border-stone-600/50 p-4 rounded-2xl active:scale-[0.98] transition-transform"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-stone-700/40 rounded-full flex items-center justify-center text-xl border border-stone-600/30">
-              🎙️
-            </div>
-            <div className="text-left flex-1">
-              <div className="text-sm font-bold text-stone-100">导游讲解</div>
-              <div className="text-[11px] text-stone-400 mt-0.5">
-                导游创建讲解团，名人视角带你游古迹
-              </div>
-            </div>
-            <div className="text-stone-500 text-sm">→</div>
-          </div>
-        </button>
-      </div>
-
       {/* 分隔线 */}
       <div className="flex items-center gap-3 mb-4">
         <div className="flex-1 h-px bg-stone-800" />
@@ -88,7 +91,7 @@ export default function HomePage({ tenantId, onNavigate }: Props) {
         <div className="flex-1 h-px bg-stone-800" />
       </div>
 
-      {/* 功能区二：扫码/定位 */}
+      {/* 扫码/定位 */}
       <div className="space-y-3 mb-5">
         <button
           onClick={handleScan}
@@ -98,28 +101,36 @@ export default function HomePage({ tenantId, onNavigate }: Props) {
           {scanning ? '正在识别时空坐标...' : '📷 扫描古迹二维码'}
         </button>
 
-        <button
-          onClick={() => {
-            emitTrackingEvent('click', 'geo_locate', tenantId)
-            if ('geolocation' in navigator) {
-              navigator.geolocation.getCurrentPosition(
-                () => onNavigate({ page: 'encounter', poiName: '惠州西湖' }),
-                () => alert('无法获取位置信息，请手动选择古迹')
-              )
-            } else {
-              alert('当前浏览器不支持定位')
-            }
-          }}
-          className="w-full bg-stone-800 text-stone-200 py-3 rounded-xl font-bold text-sm tracking-wide border border-stone-700 active:scale-95 transition-transform"
-        >
-          📍 使用地理定位寻觅古迹
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => {
+              emitTrackingEvent('click', 'geo_locate', tenantId)
+              if ('geolocation' in navigator) {
+                navigator.geolocation.getCurrentPosition(
+                  () => onNavigate({ page: 'encounter', poiName: '惠州西湖' }),
+                  () => alert('无法获取位置信息，请手动选择古迹')
+                )
+              } else {
+                alert('当前浏览器不支持定位')
+              }
+            }}
+            className="flex-1 bg-stone-800 text-stone-200 py-3 rounded-xl font-bold text-xs border border-stone-700 active:scale-95 transition-transform"
+          >
+            📍 地理定位
+          </button>
+          <button
+            onClick={() => onNavigate({ page: 'guide-join' })}
+            className="flex-1 bg-stone-800 text-stone-200 py-3 rounded-xl font-bold text-xs border border-stone-700 active:scale-95 transition-transform"
+          >
+            🎫 输入团码
+          </button>
+        </div>
       </div>
 
       {/* 分隔线 */}
       <div className="flex items-center gap-3 mb-4">
         <div className="flex-1 h-px bg-stone-800" />
-        <span className="text-[10px] text-stone-600">或手动选择</span>
+        <span className="text-[10px] text-stone-600">手动选择古迹</span>
         <div className="flex-1 h-px bg-stone-800" />
       </div>
 
@@ -152,13 +163,6 @@ export default function HomePage({ tenantId, onNavigate }: Props) {
           className="text-xs text-amber-500/80 tracking-wider border-b border-amber-500/30 pb-0.5"
         >
           📜 我的人生地理志
-        </button>
-        <span className="text-stone-700">|</span>
-        <button
-          onClick={() => onNavigate({ page: 'guide-join' })}
-          className="text-xs text-amber-500/80 tracking-wider border-b border-amber-500/30 pb-0.5"
-        >
-          🎫 输入讲解团码
         </button>
       </div>
     </div>

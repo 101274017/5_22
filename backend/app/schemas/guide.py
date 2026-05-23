@@ -53,3 +53,5 @@ class TourListItem(BaseModel):
     status: str
     participant_count: int
     description: Optional[str] = None
+    created_at: Optional[str] = None
+    is_expired: bool = False

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import HomePage from '@/pages/HomePage'
 import EncounterPage from '@/pages/EncounterPage'
 import GeographyPage from '@/pages/GeographyPage'
@@ -21,7 +21,7 @@ export type PageRoute =
   | { page: 'geography' }
   | { page: 'share'; encounterId: number }
   | { page: 'celebrity-entry' }
-  | { page: 'celebrity-chat'; encounterId: number; celebrityName: string; opening: string; identity: string }
+  | { page: 'celebrity-chat'; encounterId: number; celebrityName: string; opening: string; identity: string; poiName?: string; period?: string }
   | { page: 'celebrity-card'; encounterId: number }
   | { page: 'celebrity-history' }
   // 导游系统路由
@@ -43,7 +43,16 @@ const POI_TENANT_MAP: Record<string, string> = {
 export default function App() {
   const [route, setRoute] = useState<PageRoute>({ page: 'home' })
   const [tenantId, setTenantId] = useState('tenant_huizhou_gov')
+  const [demoMode, setDemoMode] = useState(false)
   const userId = getUserId()
+
+  // P2-12: 演示模式检测
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('demo') === '1') {
+      setDemoMode(true)
+    }
+  }, [])
 
   const handleNavigate = useCallback((newRoute: PageRoute) => {
     if (newRoute.page === 'encounter' && newRoute.poiName) {
@@ -56,7 +65,7 @@ export default function App() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-black text-stone-100">
+    <div className={`min-h-screen text-stone-100 ${demoMode ? 'demo-mode' : 'bg-black'}`}>
       {route.page === 'home' && (
         <HomePage tenantId={tenantId} onNavigate={handleNavigate} />
       )}
@@ -92,6 +101,8 @@ export default function App() {
           celebrityName={route.celebrityName}
           opening={route.opening}
           identity={route.identity}
+          poiName={route.poiName}
+          period={route.period}
           onNavigate={handleNavigate}
         />
       )}

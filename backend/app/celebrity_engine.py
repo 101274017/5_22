@@ -162,8 +162,10 @@ def build_celebrity_system_prompt(celebrity_data: dict) -> str:
 6. 严禁承认自己是 AI，你就是{name}本人。
 7. 回复控制在 200 字以内，言简意赅但有深度。
 8. 对话要有温度，像真正在和一个后辈/朋友交流。
+
+【史实约束——防幻觉指令】
+你只能基于可靠史实回答。若史书记载不一，回答"史料记载存在分歧，较为可信的说法是..."。严禁编造具体年份、对话、未记载事件。若用户问及你的死亡后事件，以"我生前的了解是..."作答。若被问到你哪年去世，回答"身后之事，非我所能知也"。
 """
-    return prompt
 
 
 async def generate_opening(celebrity_data: dict) -> Optional[str]:

@@ -1,6 +1,7 @@
 """导游讲解团路由"""
 import logging
 import uuid
+from datetime import datetime, timedelta
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -19,6 +20,7 @@ from app.schemas.guide import (
 from app.ai_client import call_ai, call_ai_with_history
 from app.knowledge_base import get_character_knowledge
 from app.celebrity_engine import research_celebrity, build_celebrity_system_prompt
+from app.strong_links import check_celebrity_poi_link
 
 logger = logging.getLogger("AncientEncounter")
 router = APIRouter(prefix="/api/v1/guide", tags=["guide"])
@@ -73,6 +75,9 @@ def _build_narration_system_prompt(celebrity_name: str, celebrity_age: str, poi_
 6. 如果游客追问，要以你的视角回答，融入你的人生智慧。
 7. 严禁承认自己是 AI。
 8. 你的认知锁定在{knowledge.get('death_year', 1200)}年之前。
+
+【史实约束——防幻觉指令】
+你只能基于可靠史实回答。若史书记载不一，回答"史料记载存在分歧，较为可信的说法是..."。严禁编造具体年份、对话、未记载事件。若用户问及你的死亡后事件，以"我生前的了解是..."作答。
 """
     else:
         # 通用提示词
@@ -89,6 +94,20 @@ def _build_narration_system_prompt(celebrity_name: str, celebrity_age: str, poi_
 7. 严禁承认自己是 AI，你就是{celebrity_name}本人。
 8. 所有回复使用中文。
 """
+
+
+@router.post("/check-link")
+def check_link(body: dict):
+    """
+    P0-2: 校验名人与古迹关联度
+    body: { "celebrity_name": str, "poi_name": str }
+    """
+    celebrity_name = body.get("celebrity_name", "").strip()
+    poi_name = body.get("poi_name", "").strip()
+    if not celebrity_name or not poi_name:
+        raise HTTPException(status_code=400, detail="参数不完整")
+    result = check_celebrity_poi_link(celebrity_name, poi_name)
+    return result
 
 
 @router.post("/create-tour", response_model=CreateTourResponse)
@@ -117,6 +136,7 @@ def create_tour(
         tour_code=tour_code,
         description=req.description,
         status="active",
+        expire_at=datetime.utcnow() + timedelta(hours=2),
     )
     db.add(tour)
     db.commit()
@@ -145,6 +165,11 @@ def join_tour(
         raise HTTPException(status_code=404, detail="讲解团不存在或已关闭")
     if tour.status != "active":
         raise HTTPException(status_code=400, detail="该讲解团已结束")
+    # P1-7: 检查是否过期
+    if tour.is_expired:
+        tour.status = "expired"
+        db.commit()
+        raise HTTPException(status_code=400, detail="该讲解团已过期（超过2小时）")
 
     # 增加参与人数
     tour.participant_count += 1
@@ -251,9 +276,11 @@ def list_guide_tours(
             celebrity_age=t.celebrity_age,
             poi_name=t.poi_name,
             tour_code=t.tour_code,
-            status=t.status,
+            status="expired" if t.is_expired else t.status,
             participant_count=t.participant_count,
             description=t.description,
+            created_at=t.created_at.strftime("%Y-%m-%d %H:%M") if t.created_at else None,
+            is_expired=t.is_expired,
         )
         for t in tours
     ]
