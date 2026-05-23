@@ -1,6 +1,13 @@
 {
   "name": "ancient-encounter",
   "private": true,
+  "scripts": {
+    "start": "start start.bat",
+    "stop": "start stop.bat",
+    "install:all": "cd backend && python -m venv venv && venv\\Scripts\\pip install -r requirements.txt && cd ../frontend && npm install",
+    "backend": "cd backend && ..\\backend\\venv\\Scripts\\python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload",
+    "frontend": "cd frontend && npx vite --host"
+  },
   "pnpm": {
     "onlyBuiltDependencies": ["esbuild"]
   }
